@@ -44,12 +44,28 @@ def _generate_barcode_image(data: str, dpi: int = 300) -> Image.Image:
 
 def _get_font(size: int) -> ImageFont.FreeTypeFont:
     """
-    Try to load a TTF font; fall back to default if not available.
+    Try to load a TTF font; fall back to a known Pillow-bundled font
+    before using the tiny default bitmap font.
+
+    This makes it work both locally (Arial available) and on Streamlit Cloud
+    (DejaVuSans available).
     """
-    try:
-        return ImageFont.truetype("Arial.ttf", size)
-    except Exception:
-        return ImageFont.load_default()
+    # Try common Arial names (local dev on Windows/macOS)
+    for name in ["Arial.ttf", "arial.ttf"]:
+        try:
+            return ImageFont.truetype(name, size)
+        except Exception:
+            continue
+
+    # Try DejaVuSans, which is usually bundled with Pillow (works on cloud)
+    for name in ["DejaVuSans.ttf", "DejaVuSans-Regular.ttf"]:
+        try:
+            return ImageFont.truetype(name, size)
+        except Exception:
+            continue
+
+    # Last resort – small bitmap font
+    return ImageFont.load_default()
 
 
 def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont):
@@ -67,15 +83,24 @@ def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont):
 
 def _get_font_bold(size: int) -> ImageFont.FreeTypeFont:
     """
-    Try to load a bold TTF font; fall back to normal if not available.
+    Try to load a bold TTF font; fall back to regular if not available.
+    Works both locally and on Streamlit Cloud.
     """
-    # Try common bold font names; adjust if you have a specific font file
-    for name in ["Arial Bold.ttf", "Arial-Bold.ttf", "Arialbd.ttf"]:
+    # Try common Arial bold names
+    for name in ["Arial Bold.ttf", "Arial-Bold.ttf", "arialbd.ttf"]:
         try:
             return ImageFont.truetype(name, size)
         except Exception:
             continue
-    # fallback to normal
+
+    # Try DejaVuSans Bold variants (bundled with Pillow)
+    for name in ["DejaVuSans-Bold.ttf", "DejaVuSans-BoldOblique.ttf"]:
+        try:
+            return ImageFont.truetype(name, size)
+        except Exception:
+            continue
+
+    # Fallback to regular font
     return _get_font(size)
 
 
@@ -158,7 +183,7 @@ def create_label_image(
         w_s, h_s = _text_size(draw, strength, font_strength)
         x_s = (width_px - w_s) // 2
         if flavour:
-            y_s = flavour_y + used_flavour_height + 30
+            y_s = flavour_y + used_flavour_height + 30  # extra spacing between flavour and mg
         else:
             y_s = centre_mid - h_s // 2
         draw.text((x_s, y_s), strength, font=font_strength, fill="black")
