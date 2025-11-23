@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-# main_label_app.py
+# main_label_app.py  (local version with printing + ZIP download)
 
 import io
 import os
+import zipfile
 
 import streamlit as st
 import pandas as pd
@@ -23,7 +24,10 @@ st.set_page_config(
 )
 
 st.title("📦 → 🏷 Label Printing App")
-st.caption("Upload a PO, review/edit quantities and case sizes, then generate and print labels.")
+st.caption(
+    "Upload a PO, review/edit quantities and case sizes, generate labels, "
+    "preview them, print locally, or download them as a ZIP file."
+)
 
 
 # ---------- Upload ----------
@@ -110,22 +114,38 @@ if st.button("🎨 Generate Labels"):
         if not paths:
             st.warning("No labels were generated.")
         else:
-            st.success(f"Generated {len(paths)} label images in: `{label_dir}`")
+            st.success(f"Generated {len(paths)} label images in `{label_dir}`.")
 
-            # Show preview of first labels
+            # small previews of first labels
             st.markdown("#### Preview of first labels")
             preview = paths[:12]
             cols = st.columns(min(4, len(preview)))
             for c, p in zip(cols, preview):
-                c.image(p, caption=os.path.basename(p), use_container_width=True)
+                c.image(p, caption=os.path.basename(p), width=150)
 
-            # store for later preview/print
+            # store for later preview/print/download
             st.session_state["label_dir"] = label_dir
             st.session_state["label_paths"] = paths
 
+            # ---- ZIP download button right after generation ----
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                for p in paths:
+                    filename = os.path.basename(p)
+                    with open(p, "rb") as f:
+                        zf.writestr(filename, f.read())
+            zip_buffer.seek(0)
 
-# ---------- Preview & Print ----------
-st.subheader("Step 5 – Preview & Print labels")
+            st.download_button(
+                label="⬇️ Download ALL labels as ZIP",
+                data=zip_buffer,
+                file_name="labels.zip",
+                mime="application/zip",
+            )
+
+
+# ---------- Preview, Print, and ZIP (can be used after rerun) ----------
+st.subheader("Step 5 – Preview, Print, and Download labels")
 
 label_dir = st.session_state.get("label_dir", CURRENT_RUN_DIR)
 label_files = list_label_files(label_dir)
@@ -146,10 +166,10 @@ else:
     # preview selected label (small)
     st.image(selected_path, caption=selected_name, width=200)
 
-    col_a, col_b = st.columns(2)
+    col_a, col_b, col_c = st.columns(3)
 
     with col_a:
-        if st.button("🖨 Open selected label in system image viewer"):
+        if st.button("🖼 Open selected in viewer"):
             ok, err = open_label_externally(selected_path)
             if ok:
                 st.success(
@@ -171,3 +191,21 @@ else:
                     with st.expander("Show print errors"):
                         for e in errors:
                             st.write(e)
+
+    with col_c:
+        # build ZIP on demand for download
+        zip_buffer2 = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer2, "w", zipfile.ZIP_DEFLATED) as zf:
+            for p in label_files:
+                filename = os.path.basename(p)
+                with open(p, "rb") as f:
+                    zf.writestr(filename, f.read())
+        zip_buffer2.seek(0)
+
+        st.download_button(
+            label="⬇️ Download ALL labels as ZIP",
+            data=zip_buffer2,
+            file_name="labels.zip",
+            mime="application/zip",
+            key="zip_download_step5",
+        )
