@@ -13,6 +13,13 @@ from barcode.codex import Code128   # ✅ correct import for Code128
 from barcode.writer import ImageWriter
 
 
+# -------------------------------------------------------------------
+# Font paths – use your own Arial .ttf files bundled with the project
+# -------------------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FONT_REGULAR_PATH = os.path.join(BASE_DIR, "fonts", "Arial.ttf")
+FONT_BOLD_PATH = os.path.join(BASE_DIR, "fonts", "Arial-Bold.ttf")
+
 # root folder for labels
 LABEL_ROOT = "labels"
 CURRENT_RUN_DIR = os.path.join(LABEL_ROOT, "current_run")
@@ -44,28 +51,47 @@ def _generate_barcode_image(data: str, dpi: int = 300) -> Image.Image:
 
 def _get_font(size: int) -> ImageFont.FreeTypeFont:
     """
-    Try to load a TTF font; fall back to a known Pillow-bundled font
-    before using the tiny default bitmap font.
-
-    This makes it work both locally (Arial available) and on Streamlit Cloud
-    (DejaVuSans available).
+    Load our bundled regular font (Arial.ttf).
+    Falls back to system fonts only if that fails.
     """
-    # Try common Arial names (local dev on Windows/macOS)
-    for name in ["Arial.ttf", "arial.ttf"]:
+    # First try the bundled font
+    try:
+        return ImageFont.truetype(FONT_REGULAR_PATH, size)
+    except Exception:
+        pass
+
+    # Fallbacks – should rarely be used if fonts/ is set up
+    for name in ["Arial.ttf", "arial.ttf", "DejaVuSans.ttf", "DejaVuSans-Regular.ttf"]:
         try:
             return ImageFont.truetype(name, size)
         except Exception:
             continue
 
-    # Try DejaVuSans, which is usually bundled with Pillow (works on cloud)
-    for name in ["DejaVuSans.ttf", "DejaVuSans-Regular.ttf"]:
-        try:
-            return ImageFont.truetype(name, size)
-        except Exception:
-            continue
-
-    # Last resort – small bitmap font
+    # Last resort – tiny bitmap font
     return ImageFont.load_default()
+
+
+def _get_font_bold(size: int) -> ImageFont.FreeTypeFont:
+    """
+    Load our bundled bold font (Arial-Bold.ttf).
+    Falls back to regular or system bold fonts if needed.
+    """
+    # First try the bundled bold font
+    try:
+        return ImageFont.truetype(FONT_BOLD_PATH, size)
+    except Exception:
+        pass
+
+    # Try some common bold system fonts
+    for name in ["Arial Bold.ttf", "Arial-Bold.ttf", "arialbd.ttf",
+                 "DejaVuSans-Bold.ttf", "DejaVuSans-BoldOblique.ttf"]:
+        try:
+            return ImageFont.truetype(name, size)
+        except Exception:
+            continue
+
+    # Fallback to regular if nothing else works
+    return _get_font(size)
 
 
 def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont):
@@ -81,29 +107,6 @@ def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont):
     return w, h
 
 
-def _get_font_bold(size: int) -> ImageFont.FreeTypeFont:
-    """
-    Try to load a bold TTF font; fall back to regular if not available.
-    Works both locally and on Streamlit Cloud.
-    """
-    # Try common Arial bold names
-    for name in ["Arial Bold.ttf", "Arial-Bold.ttf", "arialbd.ttf"]:
-        try:
-            return ImageFont.truetype(name, size)
-        except Exception:
-            continue
-
-    # Try DejaVuSans Bold variants (bundled with Pillow)
-    for name in ["DejaVuSans-Bold.ttf", "DejaVuSans-BoldOblique.ttf"]:
-        try:
-            return ImageFont.truetype(name, size)
-        except Exception:
-            continue
-
-    # Fallback to regular font
-    return _get_font(size)
-
-
 def create_label_image(
     row: pd.Series,
     idx: str,
@@ -117,7 +120,7 @@ def create_label_image(
     - Top: Product name (smaller than flavour, wrapped, centered)
     - Middle: Flavour (BOLD, biggest)
     - Under flavour: Strength (BOLD, big)
-    - Under strength: Case size (e.g. 'Case: 60')
+    - Under strength: Case size (e.g. 'Case Size: 60')
     - Bottom: Narrow rectangular barcode of SKU
     """
     # dimensions in pixels (4x4 inches by default)
@@ -143,13 +146,13 @@ def create_label_image(
             case_int = int(float(case_raw))
             case_text = f"Case Size: {case_int}"
         except Exception:
-            case_text = f"Case size: {case_raw}"
+            case_text = f"Case Size: {case_raw}"
 
     # --- Fonts ---
     font_product = _get_font(50)          # product – medium
     font_flavour = _get_font_bold(80)     # flavour – BIG & bold
     font_strength = _get_font_bold(50)    # strength – slightly smaller but still big & bold
-    font_case = _get_font_bold(50)        # case size – a bit smaller than strength
+    font_case = _get_font_bold(50)        # case size – same size as strength
 
     # --- Layout zones ---
     top_area_height = int(height_px * 0.30)      # top 30% for product
