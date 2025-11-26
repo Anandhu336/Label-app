@@ -117,6 +117,7 @@ def create_label_image(
     - Top: Product name (smaller than flavour, wrapped, centered)
     - Middle: Flavour (BOLD, biggest)
     - Under flavour: Strength (BOLD, big)
+    - Under strength: Case size (e.g. 'Case: 60')
     - Bottom: Narrow rectangular barcode of SKU
     """
     # dimensions in pixels (4x4 inches by default)
@@ -134,14 +135,25 @@ def create_label_image(
     flavour = str(row.get("Flavour", "") or "")
     strength = str(row.get("Strength", "") or "")
 
+    # Case size as nice string
+    case_raw = row.get("Case_Size", "")
+    case_text = ""
+    if pd.notna(case_raw) and str(case_raw).strip() != "":
+        try:
+            case_int = int(float(case_raw))
+            case_text = f"Case Size: {case_int}"
+        except Exception:
+            case_text = f"Case size: {case_raw}"
+
     # --- Fonts ---
-    font_product = _get_font(50)         # product – medium
-    font_flavour = _get_font_bold(80)    # flavour – BIG & bold
-    font_strength = _get_font_bold(50)   # strength – slightly smaller but still big & bold
+    font_product = _get_font(50)          # product – medium
+    font_flavour = _get_font_bold(80)     # flavour – BIG & bold
+    font_strength = _get_font_bold(50)    # strength – slightly smaller but still big & bold
+    font_case = _get_font_bold(50)        # case size – a bit smaller than strength
 
     # --- Layout zones ---
     top_area_height = int(height_px * 0.30)      # top 30% for product
-    middle_area_height = int(height_px * 0.30)   # next 30% for flavour + strength
+    middle_area_height = int(height_px * 0.30)   # next 30% for flavour + strength + case
     # bottom area is for barcode
 
     # --- 1) Product (top, centered, wrapped) ---
@@ -179,6 +191,9 @@ def create_label_image(
         used_flavour_height = 0
 
     # --- 3) Strength (just under flavour, bold) ---
+    strength_drawn = False
+    strength_bottom_y = None
+
     if strength:
         w_s, h_s = _text_size(draw, strength, font_strength)
         x_s = (width_px - w_s) // 2
@@ -187,8 +202,25 @@ def create_label_image(
         else:
             y_s = centre_mid - h_s // 2
         draw.text((x_s, y_s), strength, font=font_strength, fill="black")
+        strength_drawn = True
+        strength_bottom_y = y_s + h_s
 
-    # --- 4) Barcode (bottom, narrower) ---
+    # --- 4) Case size (under strength, or under flavour if no strength) ---
+    if case_text:
+        w_c, h_c = _text_size(draw, case_text, font_case)
+        x_c = (width_px - w_c) // 2
+
+        if strength_drawn and strength_bottom_y is not None:
+            y_c = strength_bottom_y + 20  # space under strength
+        elif flavour:
+            y_c = flavour_y + used_flavour_height + 20
+        else:
+            # fallback: center in middle area
+            y_c = centre_mid - h_c // 2
+
+        draw.text((x_c, y_c), case_text, font=font_case, fill="black")
+
+    # --- 5) Barcode (bottom, narrower) ---
     if sku:
         barcode_img = _generate_barcode_image(sku, dpi=dpi)
 
@@ -220,7 +252,7 @@ def generate_labels_from_table(final_df: pd.DataFrame, label_dir: str = CURRENT_
     """
     For each row in final_df, generate Final_Labels images using create_label_image.
     Expects final_df to have:
-      - Sku, Product, Flavour, Strength, Final_Labels
+      - Sku, Product, Flavour, Strength, Case_Size, Final_Labels
 
     label_dir: folder where PNGs will be stored.
 

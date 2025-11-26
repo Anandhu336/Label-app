@@ -57,16 +57,12 @@ st.subheader("Step 2 – Set Case Size and edit rows")
 col1, col2 = st.columns([2, 3])
 with col1:
     default_cs = st.number_input(
-        "Default Case_Size (optional – used when cells are empty)",
+        "Default Case Size ",
         min_value=1,
         value=60,
         step=1,
     )
-with col2:
-    st.markdown(
-        "You can edit **Outstanding** and **Case_Size** directly below. "
-        "`Final_Labels` are computed from these values."
-    )
+
 
 # apply default case size where missing
 table_with_cs = apply_default_case_size(base_table, default_cs)
@@ -116,12 +112,7 @@ if st.button("🎨 Generate Labels"):
         else:
             st.success(f"Generated {len(paths)} label images in `{label_dir}`.")
 
-            # small previews of first labels
-            st.markdown("#### Preview of first labels")
-            preview = paths[:12]
-            cols = st.columns(min(4, len(preview)))
-            for c, p in zip(cols, preview):
-                c.image(p, caption=os.path.basename(p), width=150)
+            
 
             # store for later preview/print/download
             st.session_state["label_dir"] = label_dir
